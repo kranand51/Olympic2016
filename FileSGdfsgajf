@@ -1,0 +1,138 @@
+## UI.r
+library(shiny)
+library(shinydashboard)
+
+dashboardPage(
+  dashboardHeader(
+    title = "Commercial Real Estate Pricing",
+    titleWidth = 350
+    ),
+  
+  dashboardSidebar(
+    selectInput("regionInput", "Region",
+                choices = regionList),
+    selectInput("CBSAInput", "CBSA",
+                choices = cbsaList),
+    selectInput("marketInput", "Market",
+                choices = marketList),
+    selectInput("propertyInput", "Property",
+                choices = propertyList),
+    textInput("sfInput", "Area",
+              value = NULL,
+              placeholder = "100"),
+    textInput("incomeInput", "Income",
+              value = NULL),
+    
+    h3("Price"),
+    textOutput("propertyPriceOutput")
+  ),
+  
+  dashboardBody(
+    box(width = 6,
+        status = "info", solidHeader = TRUE,
+        title = "All US Commercial Properties",
+        htmlOutput("mapPlot")),
+    
+    box(width = 6, status = "info", solidHeader = TRUE,
+        title = "All US Commercial Properties",
+        plotlyOutput("sqftPricePlot")),
+    
+    box(width = 6, status = "info", solidHeader = TRUE,
+        title = "SqFt vs  Recent Value",
+        plotOutput("distPlot")),
+    
+    box(width = 6, status = "info", solidHeader = TRUE,
+        title = "Income vs  Recent Value",
+        plotOutput("distPlot1"))
+  )
+)
+
+####v global.R
+masterData = read.csv(
+  "C:/Users/axkumar/Downloads/Project/test.csv",
+  stringsAsFactors = FALSE,
+  header = TRUE
+)
+
+cbsaList = unique(masterData$CBSAName)
+regionList = unique(masterData$RegionName)
+marketList = unique(masterData$MarketName)
+propertyList = unique(masterData$PropertyType)
+
+
+getPropertyPrice <- function(df, sqfeet,income) {
+  
+  reg <- lm(RecentValue ~ CurrNetRentSqFt+ Income, df)
+  
+  predict(reg, list(CurrNetRentSqFt = sqfeet,Income=income))
+}
+
+
+#### Server.R
+library(shiny)
+library(dplyr)
+library(ggplot2)
+library(googleVis)
+
+shinyServer(function(input, output) {
+  filteredData <- reactive({
+    filter(
+      masterData,
+      RegionName == input$regionInput &
+        CBSAName == input$CBSAInput &
+        MarketName == input$marketInput &
+        PropertyType == input$propertyInput
+    )
+  })
+  
+  output$sqftPricePlot <- renderPlotly({
+    df = masterData
+    
+    plot_ly(
+      data = df, x = CurrNetRentSqFt, y = RecentValue, mode = "markers"
+    )
+  })
+  
+  output$distPlot <- renderPlot({
+    df = filteredData()
+    
+#     plot_ly(
+#       data = df, x = CurrNetRentSqFt, y = RecentValue, mode = "markers"
+#     )
+    
+    ggplot(df, aes(x = CurrNetRentSqFt, y = RecentValue)) +
+      geom_line()
+  })
+  
+  output$distPlot1 <- renderPlot({
+    df = filteredData()
+    
+#     plot_ly(
+#       data = df, x = Income, y = RecentValue
+#     )
+     ggplot(df, aes(x = Income, y = RecentValue)) +
+       geom_line()
+  })
+  
+  output$propertyPriceOutput <- renderText({
+    if (!is.null(input$sfInput) & !is.null(input$incomeInput)) {
+      getPropertyPrice(filteredData(), as.numeric(input$sfInput),as.numeric(input$incomeInput))
+    }
+    
+  })
+  
+  output$mapPlot <- renderGvis({
+    df = masterData %>%
+      mutate(RentPerSqFt = RecentValue / CurrNetRentSqFt) %>%
+      select(PropertyState, RentPerSqFt)
+    
+    gvisGeoMap(
+      df,
+      locationvar = "PropertyState",
+      numvar = "RentPerSqFt",
+      options = list(region = "US")
+    )
+  })
+})
+
+
