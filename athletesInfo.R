@@ -1,5 +1,5 @@
 # Read data from CSV
-# Download from http://www.danasilver.org/static/assets/sochi-2014-athletes/athletes.csv
+# Download from http://www.danasilver.org/sochi/athletes.csv
 # See below for faster option.
 WD <- getwd() # Get current Directory path
 
